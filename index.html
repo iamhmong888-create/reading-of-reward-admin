@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>รายงานผู้ใช้งาน - ห้องสมุดนักอ่าน</title>
+<style>
+  :root{
+    --ink:#2b2b22; --paper:#faf8f2; --accent:#8a6d1d; --line:#e2ddce;
+  }
+  *{box-sizing:border-box;}
+  body{
+    font-family:"Sarabun","Noto Sans Thai",system-ui,sans-serif;
+    background:var(--paper); color:var(--ink); margin:0; padding:24px;
+  }
+  h1{font-size:22px; margin:0 0 4px;}
+  .sub{color:#6b6b5e; margin:0 0 20px; font-size:14px;}
+
+  /* ---------- login ---------- */
+  #loginBox{max-width:360px; margin:80px auto; background:#fff; border:1px solid var(--line);
+    border-radius:12px; padding:28px;}
+  #loginBox h2{margin-top:0; font-size:18px;}
+  #loginBox label{display:block; font-size:13px; margin:14px 0 4px;}
+  #loginBox input{width:100%; padding:10px; border:1px solid var(--line); border-radius:8px; font-size:15px;}
+  #loginBox button{width:100%; margin-top:18px; padding:11px; border:none; border-radius:8px;
+    background:#2b2b22; color:#fff; font-size:15px; cursor:pointer;}
+  #loginError{color:#b3261e; font-size:13px; margin-top:10px; display:none;}
+
+  /* ---------- report ---------- */
+  #reportBox{display:none;}
+  .toolbar{display:flex; gap:10px; align-items:center; margin-bottom:16px; flex-wrap:wrap;}
+  .toolbar input[type=text]{flex:1; min-width:160px; padding:9px 12px; border:1px solid var(--line);
+    border-radius:8px; font-size:14px;}
+  .btn{padding:9px 16px; border-radius:8px; border:1px solid var(--line); background:#fff;
+    cursor:pointer; font-size:14px;}
+  .btn.primary{background:#2b2b22; color:#fff; border-color:#2b2b22;}
+  .stats{display:flex; gap:14px; margin-bottom:16px; flex-wrap:wrap;}
+  .stat{background:#fff; border:1px solid var(--line); border-radius:10px; padding:12px 18px; min-width:130px;}
+  .stat .n{font-size:20px; font-weight:700;}
+  .stat .l{font-size:12px; color:#6b6b5e;}
+
+  table{width:100%; border-collapse:collapse; background:#fff; border:1px solid var(--line);
+    border-radius:10px; overflow:hidden;}
+  th,td{padding:10px 12px; text-align:left; font-size:14px; border-bottom:1px solid var(--line);}
+  th{background:#f1ede0; cursor:pointer; user-select:none; white-space:nowrap;}
+  th:hover{background:#e9e3d0;}
+  tr:last-child td{border-bottom:none;}
+  .num{text-align:right; font-variant-numeric:tabular-nums;}
+  #loadingMsg, #emptyMsg{padding:30px; text-align:center; color:#6b6b5e;}
+
+  @media print{
+    .toolbar, #logoutBtn{display:none !important;}
+    body{padding:0;}
+    table{border:none;}
+    th{background:#eee !important; -webkit-print-color-adjust:exact;}
+  }
+</style>
+</head>
+<body>
+
+<div id="loginBox">
+  <h2>เข้าสู่ระบบแอดมิน</h2>
+  <label>อีเมล</label>
+  <input type="email" id="adminEmail" autocomplete="username">
+  <label>รหัสผ่าน</label>
+  <input type="password" id="adminPass" autocomplete="current-password">
+  <button onclick="doAdminLogin()">เข้าสู่ระบบ</button>
+  <div id="loginError">เข้าสู่ระบบไม่สำเร็จ หรือบัญชีนี้ไม่มีสิทธิ์แอดมิน</div>
+</div>
+
+<div id="reportBox">
+  <h1>รายงานผู้ใช้งาน - ห้องสมุดนักอ่าน</h1>
+  <p class="sub">ข้อมูล ณ เวลาที่โหลดหน้านี้ <span id="asOf"></span> · <span id="signedInAs"></span>
+    · <a href="#" id="logoutBtn" onclick="doAdminLogout();return false;">ออกจากระบบ</a></p>
+
+  <div class="stats">
+    <div class="stat"><div class="n" id="statCount">-</div><div class="l">จำนวนผู้ใช้ทั้งหมด</div></div>
+    <div class="stat"><div class="n" id="statPoints">-</div><div class="l">แต้มคงเหลือรวม</div></div>
+    <div class="stat"><div class="n" id="statAvgBooks">-</div><div class="l">เฉลี่ยเล่มที่อ่านผ่าน/คน</div></div>
+  </div>
+
+  <div class="toolbar">
+    <input type="text" id="searchBox" placeholder="ค้นหาชื่อนักอ่าน..." oninput="renderTable()">
+    <button class="btn" onclick="exportCsv()">⬇ Export เป็น Excel/CSV</button>
+    <button class="btn primary" onclick="window.print()">🖨 พิมพ์รายงาน</button>
+  </div>
+
+  <div id="loadingMsg" style="display:none;">กำลังโหลดข้อมูล...</div>
+  <div id="emptyMsg" style="display:none;">ไม่พบข้อมูลผู้ใช้</div>
+
+  <table id="reportTable" style="display:none;">
+    <thead>
+      <tr>
+        <th onclick="sortBy('name')">ชื่อนักอ่าน</th>
+        <th onclick="sortBy('totalPoints')" class="num">แต้มคงเหลือ</th>
+        <th onclick="sortBy('booksCount')" class="num">เล่มที่อ่านผ่าน</th>
+        <th onclick="sortBy('createdAt')">วันที่สมัคร</th>
+      </tr>
+    </thead>
+    <tbody id="reportBody"></tbody>
+  </table>
+</div>
+
+<!-- Firebase (compat build) -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+
+<script>
+/* Same project config as the reader-facing index.html - this page just
+   reads /users (and only works for an account listed in /admins, which
+   the Firestore security rules enforce; the app itself doesn't grant
+   admin rights, the rules do). */
+const firebaseConfig = {
+  apiKey: "AIzaSyBkju0vdLKy_uS2qGDUH_-dCrnMn8Hp7u8",
+  authDomain: "reading-of-reward.firebaseapp.com",
+  projectId: "reading-of-reward",
+  storageBucket: "reading-of-reward.firebasestorage.app",
+  messagingSenderId: "985819630807",
+  appId: "1:985819630807:web:525e1fe75b8086501c3492"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+let allRows = [];
+let sortState = { key: 'totalPoints', dir: -1 };
+
+async function doAdminLogin(){
+  const email = document.getElementById('adminEmail').value.trim();
+  const pass = document.getElementById('adminPass').value;
+  const errorEl = document.getElementById('loginError');
+  errorEl.style.display = "none";
+  try{
+    await auth.signInWithEmailAndPassword(email, pass);
+    /* onAuthStateChanged below does the rest - it also re-checks
+       admin membership before showing any data */
+  }catch(err){
+    console.warn("Admin login error:", err);
+    errorEl.textContent = "เข้าสู่ระบบไม่สำเร็จ กรุณาตรวจสอบอีเมล/รหัสผ่าน";
+    errorEl.style.display = "block";
+  }
+}
+
+function doAdminLogout(){
+  auth.signOut().then(()=> location.reload());
+}
+
+auth.onAuthStateChanged(async (user)=>{
+  if(!user) return;
+  /* Try loading the report; if this account isn't in /admins the
+     Firestore rules will reject the read and we bounce back to login
+     with a clear message instead of showing a half-broken page. */
+  try{
+    await loadReport(user);
+  }catch(err){
+    console.warn("Not authorized as admin:", err);
+    await auth.signOut();
+    document.getElementById('loginError').textContent =
+      "บัญชีนี้เข้าสู่ระบบได้ แต่ไม่มีสิทธิ์แอดมิน (ยังไม่ถูกเพิ่มใน admins collection)";
+    document.getElementById('loginError').style.display = "block";
+  }
+});
+
+async function loadReport(user){
+  document.getElementById('loginBox').style.display = "none";
+  document.getElementById('reportBox').style.display = "block";
+  document.getElementById('loadingMsg').style.display = "block";
+  document.getElementById('signedInAs').textContent = "เข้าสู่ระบบเป็น " + (user.email || "");
+  document.getElementById('asOf').textContent = new Date().toLocaleString('th-TH', { dateStyle:'medium', timeStyle:'short' });
+
+  const snap = await db.collection('users').get(); // throws permission-denied if not admin
+
+  allRows = snap.docs.map(doc=>{
+    const d = doc.data();
+    const progress = d.progress || {};
+    const booksCount = Object.values(progress).filter(v=>v).length;
+    const createdAt = d.createdAt && d.createdAt.toDate ? d.createdAt.toDate() : null;
+    return {
+      uid: doc.id,
+      name: d.name || "(ไม่ระบุชื่อ)",
+      totalPoints: typeof d.totalPoints === "number" ? d.totalPoints : 0,
+      booksCount,
+      createdAt
+    };
+  });
+
+  document.getElementById('loadingMsg').style.display = "none";
+  renderStats();
+  renderTable();
+}
+
+function renderStats(){
+  document.getElementById('statCount').textContent = allRows.length;
+  const totalPts = allRows.reduce((s,r)=> s + r.totalPoints, 0);
+  document.getElementById('statPoints').textContent = totalPts.toLocaleString('th-TH');
+  const avgBooks = allRows.length ? (allRows.reduce((s,r)=> s + r.booksCount, 0) / allRows.length) : 0;
+  document.getElementById('statAvgBooks').textContent = avgBooks.toFixed(1);
+}
+
+function sortBy(key){
+  if(sortState.key === key){ sortState.dir *= -1; }
+  else { sortState.key = key; sortState.dir = (key === 'name' || key === 'createdAt') ? 1 : -1; }
+  renderTable();
+}
+
+function renderTable(){
+  const q = document.getElementById('searchBox').value.trim().toLowerCase();
+  let rows = allRows.filter(r => !q || r.name.toLowerCase().includes(q));
+
+  rows.sort((a,b)=>{
+    let av = a[sortState.key], bv = b[sortState.key];
+    if(sortState.key === 'createdAt'){ av = av ? av.getTime() : 0; bv = bv ? bv.getTime() : 0; }
+    if(sortState.key === 'name'){ return sortState.dir * String(av).localeCompare(String(bv), 'th'); }
+    return sortState.dir * ((av||0) - (bv||0));
+  });
+
+  const tbody = document.getElementById('reportBody');
+  const table = document.getElementById('reportTable');
+  const emptyMsg = document.getElementById('emptyMsg');
+
+  if(rows.length === 0){
+    table.style.display = "none";
+    emptyMsg.style.display = "block";
+    return;
+  }
+  emptyMsg.style.display = "none";
+  table.style.display = "table";
+
+  tbody.innerHTML = rows.map(r => `
+    <tr>
+      <td>${escapeHtml(r.name)}</td>
+      <td class="num">${r.totalPoints.toLocaleString('th-TH')}</td>
+      <td class="num">${r.booksCount}</td>
+      <td>${r.createdAt ? r.createdAt.toLocaleDateString('th-TH', { dateStyle:'medium' }) : "-"}</td>
+    </tr>
+  `).join("");
+}
+
+function escapeHtml(s){
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function exportCsv(){
+  const q = document.getElementById('searchBox').value.trim().toLowerCase();
+  const rows = allRows.filter(r => !q || r.name.toLowerCase().includes(q));
+
+  const header = ["ชื่อนักอ่าน","แต้มคงเหลือ","เล่มที่อ่านผ่าน","วันที่สมัคร"];
+  const lines = [header.join(",")];
+  rows.forEach(r=>{
+    const dateStr = r.createdAt ? r.createdAt.toLocaleDateString('th-TH') : "";
+    const line = [`"${r.name.replace(/"/g,'""')}"`, r.totalPoints, r.booksCount, dateStr].join(",");
+    lines.push(line);
+  });
+
+  /* BOM prefix so Thai text opens correctly in Excel, not just plain CSV readers */
+  const csv = "\uFEFF" + lines.join("\r\n");
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `รายงานผู้ใช้งาน_${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+</script>
+</body>
+</html>
