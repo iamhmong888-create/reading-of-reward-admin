@@ -156,8 +156,17 @@ auth.onAuthStateChanged(async (user)=>{
   }catch(err){
     console.warn("Not authorized as admin:", err);
     await auth.signOut();
-    document.getElementById('loginError').textContent =
-      "บัญชีนี้เข้าสู่ระบบได้ แต่ไม่มีสิทธิ์แอดมิน (ยังไม่ถูกเพิ่มใน admins collection)";
+    /* loadReport() already hid the login box and showed the report
+       shell optimistically before the failing Firestore read - undo
+       that so the person actually sees the error instead of a
+       permanently stuck "loading" screen. */
+    document.getElementById('reportBox').style.display = "none";
+    document.getElementById('loadingMsg').style.display = "none";
+    document.getElementById('loginBox').style.display = "block";
+    const detail = (err && err.code === 'permission-denied')
+      ? "บัญชีนี้เข้าสู่ระบบได้ แต่ไม่มีสิทธิ์แอดมิน (ยังไม่ถูกเพิ่มใน admins collection หรือกฎยังไม่ได้ Publish)"
+      : "โหลดข้อมูลไม่สำเร็จ: " + (err && err.message ? err.message : "ไม่ทราบสาเหตุ");
+    document.getElementById('loginError').textContent = detail;
     document.getElementById('loginError').style.display = "block";
   }
 });
